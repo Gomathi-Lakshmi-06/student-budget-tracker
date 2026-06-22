@@ -4,7 +4,8 @@
 //  + All previous features retained
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useReducer, useMemo, useRef } from "react";
+import { useEffect, useState, useReducer, useMemo, useRef } from "react";
+import { entriesApi } from "./api";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, CartesianGrid,
@@ -58,49 +59,18 @@ const auth = {
   },
 };
 
-// ─── SEED DATA ────────────────────────────────────────────────────────────────
-const SEED_ENTRIES = [
-  { id: createId(), label: "Rent",          amount: 450,  category: "Housing",       type: "expense", date: "2026-03-01" },
-  { id: createId(), label: "Groceries",     amount: 60,   category: "Food",          type: "expense", date: "2026-03-03" },
-  { id: createId(), label: "Part-time job", amount: 900,  category: "Income",        type: "income",  date: "2026-03-05" },
-  { id: createId(), label: "Bus pass",      amount: 35,   category: "Transport",     type: "expense", date: "2026-03-06" },
-  { id: createId(), label: "Coffee",        amount: 12,   category: "Food",          type: "expense", date: "2026-03-07" },
-  { id: createId(), label: "Textbooks",     amount: 85,   category: "Education",     type: "expense", date: "2026-02-28" },
-  { id: createId(), label: "Gym",           amount: 30,   category: "Health",        type: "expense", date: "2026-02-25" },
-  { id: createId(), label: "Netflix",       amount: 15,   category: "Entertainment", type: "expense", date: "2026-02-20" },
-  { id: createId(), label: "Freelance",     amount: 250,  category: "Income",        type: "income",  date: "2026-02-18" },
-  { id: createId(), label: "Lunch",         amount: 18,   category: "Food",          type: "expense", date: "2026-03-04" },
-  { id: createId(), label: "Uber",          amount: 14,   category: "Transport",     type: "expense", date: "2026-03-02" },
-  { id: createId(), label: "Phone bill",    amount: 25,   category: "Other",         type: "expense", date: "2026-02-10" },
-  { id: createId(), label: "Dinner out",    amount: 32,   category: "Food",          type: "expense", date: "2026-02-22" },
-  { id: createId(), label: "Books",         amount: 22,   category: "Education",     type: "expense", date: "2026-02-14" },
-  { id: createId(), label: "Medicine",      amount: 18,   category: "Health",        type: "expense", date: "2026-02-08" },
-];
-const SEED_GOALS = [
+// ─── DEFAULT UI DATA ──────────────────────────────────────────────────────────
+const DEFAULT_GOALS = [
   { id: createId(), name: "Emergency Fund", target: 1000, saved: 320, emoji: "🛡️", color: "#6366f1", deadline: "2026-12-31" },
   { id: createId(), name: "New Laptop",     target: 800,  saved: 450, emoji: "💻", color: "#06b6d4", deadline: "2026-06-30" },
   { id: createId(), name: "Summer Holiday", target: 500,  saved: 75,  emoji: "✈️", color: "#f97316", deadline: "2026-07-01" },
 ];
-const SEED_RECURRING = [
+const DEFAULT_RECURRING = [
   { id: createId(), label: "Netflix",  amount: 15, category: "Entertainment", frequency: "monthly", nextDate: "2026-04-01", active: true  },
   { id: createId(), label: "Gym",      amount: 30, category: "Health",        frequency: "monthly", nextDate: "2026-04-05", active: true  },
   { id: createId(), label: "Bus pass", amount: 35, category: "Transport",     frequency: "monthly", nextDate: "2026-04-06", active: true  },
   { id: createId(), label: "Spotify",  amount: 10, category: "Entertainment", frequency: "monthly", nextDate: "2026-04-10", active: false },
 ];
-
-// ─── STORE ────────────────────────────────────────────────────────────────────
-let store = { entries:[...SEED_ENTRIES], goals:[...SEED_GOALS], recurring:[...SEED_RECURRING] };
-const api = {
-  addEntry:        (e)       => { const n={...e,id:createId()}; store.entries.unshift(n); return Promise.resolve(n); },
-  deleteEntry:     (id)      => { store.entries=store.entries.filter(e=>e.id!==id); return Promise.resolve(); },
-  updateEntry:     (id,data) => { store.entries=store.entries.map(e=>e.id===id?{...e,...data}:e); return Promise.resolve(store.entries.find(e=>e.id===id)); },
-  addGoal:         (g)       => { const n={...g,id:createId()}; store.goals.push(n); return Promise.resolve(n); },
-  updateGoal:      (id,data) => { store.goals=store.goals.map(g=>g.id===id?{...g,...data}:g); return Promise.resolve(); },
-  deleteGoal:      (id)      => { store.goals=store.goals.filter(g=>g.id!==id); return Promise.resolve(); },
-  addRecurring:    (r)       => { const n={...r,id:createId()}; store.recurring.push(n); return Promise.resolve(n); },
-  updateRecurring: (id,data) => { store.recurring=store.recurring.map(r=>r.id===id?{...r,...data}:r); return Promise.resolve(); },
-  deleteRecurring: (id)      => { store.recurring=store.recurring.filter(r=>r.id!==id); return Promise.resolve(); },
-};
 
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const CATEGORIES = ["Food","Housing","Transport","Entertainment","Education","Health","Income","Other"];
@@ -120,6 +90,7 @@ const T = {
 // ─── REDUCER ──────────────────────────────────────────────────────────────────
 function reducer(state, action) {
   switch(action.type) {
+    case "SET_ENTRIES": return {...state,entries:action.p};
     case "ADD_ENTRY":  return {...state,entries:[action.p,...state.entries]};
     case "DEL_ENTRY":  return {...state,entries:state.entries.filter(e=>e.id!==action.id)};
     case "UPD_ENTRY":  return {...state,entries:state.entries.map(e=>e.id===action.p.id?action.p:e)};
@@ -290,7 +261,20 @@ function EntriesTab({state,dispatch,monthlyBudget,setMonthlyBudget,t,f,currency}
   const now=new Date();
   const thisExp=state.entries.filter(e=>{const d=new Date(e.date);return e.type==="expense"&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce((s,e)=>s+e.amount,0);
   const bPct=Math.min((thisExp/monthlyBudget)*100,100); const bOver=thisExp>monthlyBudget;
-  const handleAdd=async()=>{ if(!form.label.trim())return setErr("Add a label."); if(!form.amount||+form.amount<=0)return setErr("Enter a valid amount."); setErr(""); setLoading(true); const p=await api.addEntry({...form,amount:parseFloat(form.amount)}); dispatch({type:"ADD_ENTRY",p}); setForm(fr=>({...fr,label:"",amount:""})); setLoading(false); };
+  const handleAdd=async()=>{
+    if(!form.label.trim())return setErr("Add a label.");
+    if(!form.amount||+form.amount<=0)return setErr("Enter a valid amount.");
+    setErr(""); setLoading(true);
+    try {
+      const p=await entriesApi.createEntry({...form,amount:parseFloat(form.amount)});
+      dispatch({type:"ADD_ENTRY",p});
+      setForm(fr=>({...fr,label:"",amount:""}));
+    } catch(e) {
+      setErr(e.message || "Unable to add entry. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
   const i=Inp(t);
 
   return (
@@ -349,7 +333,7 @@ function EntriesTab({state,dispatch,monthlyBudget,setMonthlyBudget,t,f,currency}
               <select style={{...i,padding:"6px 10px",fontSize:12}} value={editForm.category} onChange={e=>setEditForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select>
               <select style={{...i,padding:"6px 10px",fontSize:12}} value={editForm.type} onChange={e=>setEditForm(f=>({...f,type:e.target.value}))}><option value="expense">Expense</option><option value="income">Income</option></select>
               <input style={{...i,padding:"6px 10px",fontSize:12}} type="date" value={editForm.date} onChange={e=>setEditForm(f=>({...f,date:e.target.value}))}/>
-              <button onClick={async()=>{const p=await api.updateEntry(editingId,{...editForm,amount:parseFloat(editForm.amount)});dispatch({type:"UPD_ENTRY",p});setEditingId(null);}} style={Btn(t.green,"#fff",true)}>✓ Save</button>
+              <button onClick={async()=>{setErr("Entry editing requires a backend update endpoint.");setEditingId(null);}} style={Btn(t.green,"#fff",true)}>✓ Save</button>
               <button onClick={()=>setEditingId(null)} style={Btn(t.surface2,t.textMuted,true)}>✕</button>
             </div>
           </div>
@@ -361,7 +345,7 @@ function EntriesTab({state,dispatch,monthlyBudget,setMonthlyBudget,t,f,currency}
             <div style={{fontSize:11,color:t.textFaint,minWidth:52,textAlign:"right"}}>{new Date(entry.date+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</div>
             <div style={{fontSize:14,fontWeight:800,minWidth:80,textAlign:"right",color:entry.type==="income"?t.green:t.text}}>{entry.type==="income"?"+":"−"}{f(entry.amount)}</div>
             <button onClick={()=>{setEditingId(entry.id);setEditForm({...entry});}} style={{background:"transparent",border:"none",cursor:"pointer",color:t.textMuted,fontSize:13,padding:"0 3px",opacity:.5}} onMouseEnter={e=>{e.target.style.color=t.accent;e.target.style.opacity=1;}} onMouseLeave={e=>{e.target.style.color=t.textMuted;e.target.style.opacity=.5;}}>✏</button>
-            <button onClick={async()=>{await api.deleteEntry(entry.id);dispatch({type:"DEL_ENTRY",id:entry.id});}} style={{background:"transparent",border:"none",cursor:"pointer",color:t.textMuted,fontSize:16,padding:"0 3px",opacity:.4}} onMouseEnter={e=>{e.target.style.color=t.red;e.target.style.opacity=1;}} onMouseLeave={e=>{e.target.style.color=t.textMuted;e.target.style.opacity=.4;}}>×</button>
+            <button onClick={async()=>{try{setErr("");await entriesApi.deleteEntry(entry.id);dispatch({type:"DEL_ENTRY",id:entry.id});}catch(e){setErr(e.message || "Unable to delete entry. Please try again.");}}} style={{background:"transparent",border:"none",cursor:"pointer",color:t.textMuted,fontSize:16,padding:"0 3px",opacity:.4}} onMouseEnter={e=>{e.target.style.color=t.red;e.target.style.opacity=1;}} onMouseLeave={e=>{e.target.style.color=t.textMuted;e.target.style.opacity=.4;}}>×</button>
           </div>
         ))}
       </Card>
@@ -381,9 +365,9 @@ function GoalsTab({state,dispatch,t,f}) {
   const GCOLORS=["#6366f1","#06b6d4","#f97316","#22c55e","#ec4899","#8b5cf6","#ef4444","#eab308","#14b8a6"];
   const i=Inp(t);
 
-  const addGoal=async()=>{ if(!form.name.trim())return setErr("Goal name required"); if(!form.target||+form.target<=0)return setErr("Enter a valid target"); setErr(""); const p=await api.addGoal({...form,target:parseFloat(form.target),saved:parseFloat(form.saved)||0}); dispatch({type:"ADD_GOAL",p}); setForm({name:"",target:"",saved:"0",emoji:"🎯",color:"#6366f1",deadline:todayStr()}); setShowAdd(false); };
-  const contribute=async(id)=>{ const amt=parseFloat(contribAmt); if(isNaN(amt)||amt<=0)return; const g=state.goals.find(g=>g.id===id); const p={...g,saved:Math.min(g.saved+amt,g.target)}; await api.updateGoal(id,p); dispatch({type:"UPD_GOAL",p}); setContribId(null); setContribAmt(""); };
-  const deleteGoal=async(id)=>{ await api.deleteGoal(id); dispatch({type:"DEL_GOAL",id}); };
+  const addGoal=async()=>{ if(!form.name.trim())return setErr("Goal name required"); if(!form.target||+form.target<=0)return setErr("Enter a valid target"); setErr(""); const p={...form,id:createId(),target:parseFloat(form.target),saved:parseFloat(form.saved)||0}; dispatch({type:"ADD_GOAL",p}); setForm({name:"",target:"",saved:"0",emoji:"🎯",color:"#6366f1",deadline:todayStr()}); setShowAdd(false); };
+  const contribute=async(id)=>{ const amt=parseFloat(contribAmt); if(isNaN(amt)||amt<=0)return; const g=state.goals.find(g=>g.id===id); const p={...g,saved:Math.min(g.saved+amt,g.target)}; dispatch({type:"UPD_GOAL",p}); setContribId(null); setContribAmt(""); };
+  const deleteGoal=async(id)=>{ dispatch({type:"DEL_GOAL",id}); };
   const daysLeft=(dl)=>Math.max(0,Math.ceil((new Date(dl)-new Date())/86400000));
 
   return (
@@ -459,7 +443,21 @@ function ReceiptScanner({state,dispatch,t,f}) {
     setScanning(false);
   };
 
-  const addEntries=async()=>{ setAdding(true); const dt=result?.date||todayStr(); for(const it of items.filter(i=>i.include)){ const p=await api.addEntry({label:it.label,amount:it.amount,category:it.category,type:"expense",date:dt}); dispatch({type:"ADD_ENTRY",p}); } setResult(null);setPreview(null);setItems([]); setAdding(false); };
+  const addEntries=async()=>{
+    setAdding(true); setError("");
+    try {
+      const dt=result?.date||todayStr();
+      for(const it of items.filter(i=>i.include)){
+        const p=await entriesApi.createEntry({label:it.label,amount:it.amount,category:it.category,type:"expense",date:dt});
+        dispatch({type:"ADD_ENTRY",p});
+      }
+      setResult(null);setPreview(null);setItems([]);
+    } catch(e) {
+      setError(e.message || "Unable to save receipt items. Please try again.");
+    } finally {
+      setAdding(false);
+    }
+  };
   const i=Inp(t);
 
   return (
@@ -511,10 +509,20 @@ function RecurringTab({state,dispatch,t,f}) {
 
   const annualCost=r=>r.amount*(FREQ_MULT[r.frequency]||12);
   const isDue=r=>Math.ceil((new Date(r.nextDate)-new Date())/86400000)<=3;
-  const addR=async()=>{ if(!form.label.trim())return setErr("Label required"); if(!form.amount||+form.amount<=0)return setErr("Valid amount needed"); setErr(""); const p=await api.addRecurring({...form,amount:parseFloat(form.amount),active:true}); dispatch({type:"ADD_REC",p}); setForm({label:"",amount:"",category:"Entertainment",frequency:"monthly",nextDate:todayStr()}); setShowAdd(false); };
-  const toggleR=async(id,active)=>{ const r=state.recurring.find(r=>r.id===id); const p={...r,active:!active}; await api.updateRecurring(id,p); dispatch({type:"UPD_REC",p}); };
-  const removeR=async(id)=>{ await api.deleteRecurring(id); dispatch({type:"DEL_REC",id}); };
-  const applyNow=async(r)=>{ const p=await api.addEntry({label:r.label,amount:r.amount,category:r.category,type:"expense",date:todayStr()}); dispatch({type:"ADD_ENTRY",p}); const nd=new Date(); nd.setDate(nd.getDate()+(FREQ_DAYS[r.frequency]||30)); const upd={...r,nextDate:nd.toISOString().slice(0,10)}; await api.updateRecurring(r.id,upd); dispatch({type:"UPD_REC",p:upd}); };
+  const addR=async()=>{ if(!form.label.trim())return setErr("Label required"); if(!form.amount||+form.amount<=0)return setErr("Valid amount needed"); setErr(""); const p={...form,id:createId(),amount:parseFloat(form.amount),active:true}; dispatch({type:"ADD_REC",p}); setForm({label:"",amount:"",category:"Entertainment",frequency:"monthly",nextDate:todayStr()}); setShowAdd(false); };
+  const toggleR=async(id,active)=>{ const r=state.recurring.find(r=>r.id===id); const p={...r,active:!active}; dispatch({type:"UPD_REC",p}); };
+  const removeR=async(id)=>{ dispatch({type:"DEL_REC",id}); };
+  const applyNow=async(r)=>{
+    setErr("");
+    try {
+      const p=await entriesApi.createEntry({label:r.label,amount:r.amount,category:r.category,type:"expense",date:todayStr()});
+      dispatch({type:"ADD_ENTRY",p});
+      const nd=new Date(); nd.setDate(nd.getDate()+(FREQ_DAYS[r.frequency]||30));
+      const upd={...r,nextDate:nd.toISOString().slice(0,10)}; dispatch({type:"UPD_REC",p:upd});
+    } catch(e) {
+      setErr(e.message || "Unable to apply recurring expense. Please try again.");
+    }
+  };
 
   const active=state.recurring.filter(r=>r.active); const inactive=state.recurring.filter(r=>!r.active);
   const monthlyTotal=active.reduce((s,r)=>s+(r.amount*(r.frequency==="weekly"?4.33:r.frequency==="biweekly"?2.17:r.frequency==="yearly"?0.083:1)),0);
@@ -638,7 +646,9 @@ export default function App() {
   const [dark,setDark]=useState(true);
   const t=T[dark?"dark":"light"];
 
-  const [state,dispatch]=useReducer(reducer,{entries:SEED_ENTRIES,goals:SEED_GOALS,recurring:SEED_RECURRING});
+  const [state,dispatch]=useReducer(reducer,{entries:[],goals:DEFAULT_GOALS,recurring:DEFAULT_RECURRING});
+  const [entriesLoading,setEntriesLoading]=useState(true);
+  const [entriesError,setEntriesError]=useState("");
   const [budget,setBudget]=useState(600);
   const [tab,setTab]=useState("entries");
 
@@ -647,6 +657,24 @@ export default function App() {
   const currency=CURRENCIES.find(c=>c.code===currencyCode)||CURRENCIES[0];
   // f() is the currency formatter passed to ALL tabs
   const f=(n)=>fmt(n,currency.symbol);
+
+  useEffect(()=>{
+    let active=true;
+    const loadEntries=async()=>{
+      setEntriesLoading(true);
+      setEntriesError("");
+      try {
+        const entries=await entriesApi.getEntries();
+        if(active) dispatch({type:"SET_ENTRIES",p:Array.isArray(entries)?entries:[]});
+      } catch(e) {
+        if(active) setEntriesError(e.message || "Unable to load entries. Please try again.");
+      } finally {
+        if(active) setEntriesLoading(false);
+      }
+    };
+    loadEntries();
+    return ()=>{ active=false; };
+  },[]);
 
   const TABS=[
     {id:"entries",  label:"Entries",  icon:"📋"},
@@ -712,6 +740,8 @@ export default function App() {
 
       {/* ── PAGE CONTENT — f and currency passed to every tab ── */}
       <div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+        {entriesError&&<div style={{color:t.red,background:t.red+"11",border:`1px solid ${t.red}33`,borderRadius:10,padding:"10px 12px",fontSize:12,marginBottom:16}}>{entriesError}</div>}
+        {entriesLoading&&<div style={{color:t.textMuted,background:t.surface,border:`1px solid ${t.border}`,borderRadius:10,padding:"10px 12px",fontSize:12,marginBottom:16}}>Loading entries…</div>}
         {tab==="entries"   && <EntriesTab    state={state} dispatch={dispatch} monthlyBudget={budget} setMonthlyBudget={setBudget} t={t} f={f} currency={currency}/>}
         {tab==="goals"     && <GoalsTab      state={state} dispatch={dispatch} t={t} f={f}/>}
         {tab==="receipt"   && <ReceiptScanner state={state} dispatch={dispatch} t={t} f={f}/>}
