@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState, useReducer, useMemo, useRef } from "react";
+import { createWorker } from "tesseract.js";
 import { entriesApi } from "./api";
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -17,31 +18,22 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 // ─── CURRENCIES ──────────────────────────────────────────────────────────────
 // ★ ADD / REMOVE currencies here freely
+const rates = {
+  INR: 1,
+  USD: 0.0116,
+  EUR: 0.0101,
+  GBP: 0.0086,
+};
+
 const CURRENCIES = [
-  { code:"GBP",  symbol:"£",   flag:"🇬🇧", name:"British Pound"      },
+  { code:"INR",  symbol:"₹",   flag:"🇮🇳", name:"Indian Rupee"       },
   { code:"USD",  symbol:"$",   flag:"🇺🇸", name:"US Dollar"          },
   { code:"EUR",  symbol:"€",   flag:"🇪🇺", name:"Euro"               },
-  { code:"INR",  symbol:"₹",   flag:"🇮🇳", name:"Indian Rupee"       },
-  { code:"JPY",  symbol:"¥",   flag:"🇯🇵", name:"Japanese Yen"       },
-  { code:"CNY",  symbol:"¥",   flag:"🇨🇳", name:"Chinese Yuan"       },
-  { code:"AUD",  symbol:"A$",  flag:"🇦🇺", name:"Australian Dollar"  },
-  { code:"CAD",  symbol:"C$",  flag:"🇨🇦", name:"Canadian Dollar"    },
-  { code:"CHF",  symbol:"Fr",  flag:"🇨🇭", name:"Swiss Franc"        },
-  { code:"SGD",  symbol:"S$",  flag:"🇸🇬", name:"Singapore Dollar"   },
-  { code:"AED",  symbol:"د.إ", flag:"🇦🇪", name:"UAE Dirham"         },
-  { code:"MYR",  symbol:"RM",  flag:"🇲🇾", name:"Malaysian Ringgit"  },
-  { code:"BRL",  symbol:"R$",  flag:"🇧🇷", name:"Brazilian Real"     },
-  { code:"MXN",  symbol:"$",   flag:"🇲🇽", name:"Mexican Peso"       },
-  { code:"KRW",  symbol:"₩",   flag:"🇰🇷", name:"South Korean Won"   },
-  { code:"ZAR",  symbol:"R",   flag:"🇿🇦", name:"South African Rand" },
-  { code:"SEK",  symbol:"kr",  flag:"🇸🇪", name:"Swedish Krona"      },
-  { code:"NOK",  symbol:"kr",  flag:"🇳🇴", name:"Norwegian Krone"    },
-  { code:"TRY",  symbol:"₺",   flag:"🇹🇷", name:"Turkish Lira"       },
-  { code:"THB",  symbol:"฿",   flag:"🇹🇭", name:"Thai Baht"          },
+  { code:"GBP",  symbol:"£",   flag:"🇬🇧", name:"British Pound"      },
 ];
 
-// fmt: always pass currency.symbol as 2nd arg from components
-const fmt = (n, sym = "£") => sym + Number(n).toFixed(2);
+const convertAmount = (amount, targetCurrency) => Number(amount || 0) * (rates[targetCurrency] ?? 1);
+const fmt = (n, sym = "₹") => sym + Number(n || 0).toFixed(2);
 
 // ─── MOCK AUTH ────────────────────────────────────────────────────────────────
 let usersDB = [{ id: "u1", name: "Demo User", email: "demo@budget.track", password: "demo123" }];
@@ -109,9 +101,9 @@ const exportCSV = (entries) => {
   const blob=new Blob(["Label,Amount,Category,Type,Date\n"+entries.map(e=>`"${e.label}",${e.amount},"${e.category}","${e.type}","${e.date}"`).join("\n")],{type:"text/csv"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="budget.csv"; a.click();
 };
-const exportPDF=(entries,stats,sym)=>{
+const exportPDF=(entries,stats,f)=>{
   const w=window.open("","_blank");
-  w.document.write(`<!DOCTYPE html><html><head><style>body{font-family:Arial,sans-serif;padding:32px}h1{color:#6366f1}table{width:100%;border-collapse:collapse}th{background:#6366f1;color:#fff;padding:8px;text-align:left}td{padding:8px;border-bottom:1px solid #eee}</style></head><body><h1>budget.track</h1><p>Income: ${sym}${stats.income.toFixed(2)} | Spent: ${sym}${stats.expenses.toFixed(2)} | Balance: ${sym}${stats.balance.toFixed(2)}</p><table><thead><tr><th>Label</th><th>Category</th><th>Amount</th><th>Date</th></tr></thead><tbody>${entries.map(e=>`<tr><td>${e.label}</td><td>${e.category}</td><td style="color:${e.type==="income"?"#16a34a":"#dc2626"}">${e.type==="income"?"+":"-"}${sym}${e.amount.toFixed(2)}</td><td>${e.date}</td></tr>`).join("")}</tbody></table></body></html>`);
+  w.document.write(`<!DOCTYPE html><html><head><style>body{font-family:Arial,sans-serif;padding:32px}h1{color:#6366f1}table{width:100%;border-collapse:collapse}th{background:#6366f1;color:#fff;padding:8px;text-align:left}td{padding:8px;border-bottom:1px solid #eee}</style></head><body><h1>budget.track</h1><p>Income: ${f(stats.income)} | Spent: ${f(stats.expenses)} | Balance: ${f(stats.balance)}</p><table><thead><tr><th>Label</th><th>Category</th><th>Amount</th><th>Date</th></tr></thead><tbody>${entries.map(e=>`<tr><td>${e.label}</td><td>${e.category}</td><td style="color:${e.type==="income"?"#16a34a":"#dc2626"}">${e.type==="income"?"+":"-"}${f(e.amount)}</td><td>${e.date}</td></tr>`).join("")}</tbody></table></body></html>`);
   w.document.close(); setTimeout(()=>w.print(),500);
 };
 
@@ -319,7 +311,7 @@ function EntriesTab({state,dispatch,monthlyBudget,setMonthlyBudget,t,f,currency}
         <select style={{...i,fontSize:11,padding:"7px 10px"}} value={catFilter} onChange={e=>setCatFilter(e.target.value)}><option value="all">All cats</option>{CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
         <select style={{...i,fontSize:11,padding:"7px 10px"}} value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="date">Date</option><option value="amount">Amount</option><option value="label">Label</option></select>
         <button onClick={()=>exportCSV(visible)} style={Btn(t.surface2,t.textMuted,true)}>⬇ CSV</button>
-        <button onClick={()=>exportPDF(visible,{income,expenses,balance},currency?.symbol||"£")} style={Btn(t.surface2,t.textMuted,true)}>⬇ PDF</button>
+        <button onClick={()=>exportPDF(visible,{income,expenses,balance},f)} style={Btn(t.surface2,t.textMuted,true)}>⬇ PDF</button>
       </div>
       <div style={{fontSize:11,color:t.textFaint,marginBottom:8,textAlign:"right"}}>{visible.length} of {state.entries.length} entries</div>
 
@@ -421,26 +413,131 @@ function GoalsTab({state,dispatch,t,f}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  RECEIPT OCR HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+const RECEIPT_TYPES = ["image/jpeg", "image/jpg", "image/png"];
+const TOTAL_PATTERNS = [
+  /(?:grand\s+total|invoice\s+total|total\s+amount|amount\s+due|total|amount)\s*[:\-]?\s*(?:rs\.?|inr|₹|\$|€|£)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)/gi,
+  /(?:rs\.?|inr|₹|\$|€|£)\s*([0-9][0-9,]*(?:\.\d{1,2})?)\s*(?:grand\s+total|invoice\s+total|total|amount)?/gi,
+];
+
+const parseMoney = value => Number(String(value || "").replace(/,/g, ""));
+
+const extractReceiptTotal = text => {
+  const matches = [];
+  TOTAL_PATTERNS.forEach(pattern => {
+    let match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(text)) !== null) {
+      const amount = parseMoney(match[1]);
+      if (Number.isFinite(amount) && amount > 0) matches.push(amount);
+    }
+  });
+  if (matches.length) return matches[matches.length - 1];
+
+  const numericLines = text.split(/\n+/).map(line => line.match(/([0-9][0-9,]*\.\d{2})\b/)).filter(Boolean).map(m => parseMoney(m[1]));
+  return numericLines.length ? Math.max(...numericLines) : 0;
+};
+
+const parseReceiptText = text => {
+  const lines = text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+  const total = extractReceiptTotal(text);
+  if (!total) return null;
+  const dateMatch = text.match(/\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4})\b/);
+  const parsedDate = dateMatch ? new Date(dateMatch[1]) : null;
+  const store = lines.find(line => !/total|amount|invoice|date|gst|tax/i.test(line)) || "Scanned Receipt";
+  return {
+    store,
+    date: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString().slice(0,10) : todayStr(),
+    total,
+    items: [{ label: `${store} receipt`, amount: total, category: "Food" }],
+  };
+};
+
+const preprocessReceiptImage = file => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(Math.max(1400 / Math.max(img.width, img.height), 1), 2.5);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < image.data.length; i += 4) {
+      const gray = (image.data[i] * 0.299 + image.data[i + 1] * 0.587 + image.data[i + 2] * 0.114);
+      const contrasted = gray > 145 ? 255 : Math.max(0, gray - 30);
+      image.data[i] = image.data[i + 1] = image.data[i + 2] = contrasted;
+    }
+    ctx.putImageData(image, 0, 0);
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("Unable to preprocess image")), "image/png", 1);
+  };
+  img.onerror = reject;
+  img.src = URL.createObjectURL(file);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  RECEIPT SCANNER
 // ─────────────────────────────────────────────────────────────────────────────
 function ReceiptScanner({state,dispatch,t,f}) {
   const [scanning,setScanning]=useState(false); const [result,setResult]=useState(null);
   const [preview,setPreview]=useState(null); const [error,setError]=useState("");
   const [adding,setAdding]=useState(false); const [items,setItems]=useState([]);
-  const fileRef=useRef();
+  const [rawText,setRawText]=useState(""); const [confidence,setConfidence]=useState(null);
+  const fileRef=useRef(); const workerRef=useRef(null);
+
+  useEffect(()=>()=>{ workerRef.current?.terminate?.(); },[]);
+
+  const getWorker=async()=>{
+    if(workerRef.current) return workerRef.current;
+    console.log("[ReceiptScanner] Initializing Tesseract.js worker");
+    const worker=await createWorker("eng", 1, {
+      logger: m => console.log("[ReceiptScanner][Tesseract]", m),
+    });
+    await worker.setParameters({
+      tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.,:/- ₹$€£\n",
+      preserve_interword_spaces: "1",
+    });
+    console.log("[ReceiptScanner] Tesseract.js worker initialized");
+    workerRef.current=worker;
+    return worker;
+  };
 
   const handleFile=async(file)=>{
-    if(!file)return; setError(""); setResult(null); setScanning(true);
+    if(!file)return; setError(""); setResult(null); setItems([]); setRawText(""); setConfidence(null);
+    if(!RECEIPT_TYPES.includes(file.type)) { setError("Please upload a JPG, JPEG, or PNG receipt image."); return; }
+    setScanning(true);
     const reader=new FileReader(); reader.onload=e=>setPreview(e.target.result); reader.readAsDataURL(file);
     try {
-      const base64=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result.split(",")[1]); r.onerror=rej; r.readAsDataURL(file); });
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},{type:"text",text:`Analyze this receipt. Return ONLY valid JSON, no markdown:\n{"store":"name","date":"YYYY-MM-DD","total":0.00,"items":[{"label":"item","amount":0.00,"category":"Food"}]}\nCategories: Food, Housing, Transport, Entertainment, Education, Health, Other`}]}]})});
-      const data=await resp.json();
-      const text=data.content?.map(c=>c.text||"").join("")||"";
-      const parsed=JSON.parse(text.replace(/```json|```/g,"").trim());
-      setResult(parsed); setItems(parsed.items.map(it=>({...it,id:createId(),include:true})));
-    } catch(e) { setError("Could not scan receipt. Please try a clearer image."); }
+      const processed=await preprocessReceiptImage(file);
+      const worker=await getWorker();
+      const { data }=await worker.recognize(processed);
+      const text=data.text || "";
+      console.log("[ReceiptScanner] OCR output:", text);
+      console.log("[ReceiptScanner] OCR confidence:", data.confidence);
+      setRawText(text); setConfidence(Math.round(data.confidence || 0));
+      const parsed=parseReceiptText(text);
+      if(!parsed) {
+        setResult({store:"OCR Text Extracted",date:todayStr(),total:0,items:[],parseFailed:true});
+        setError("OCR completed, but no receipt total could be parsed. Review the extracted text below.");
+      } else {
+        setResult(parsed); setItems(parsed.items.map(it=>({...it,id:createId(),include:true})));
+      }
+    } catch(e) {
+      console.error("[ReceiptScanner] Scan failed", e);
+      setError(e.message || "Could not scan receipt. Please try a clearer image.");
+    }
     setScanning(false);
+  };
+
+  const generateSampleReceipt=()=>{
+    const canvas=document.createElement("canvas"); canvas.width=720; canvas.height=920;
+    const ctx=canvas.getContext("2d");
+    ctx.fillStyle="#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="#111"; ctx.font="bold 42px Arial"; ctx.fillText("CAMPUS MART",70,90);
+    ctx.font="26px Arial";
+    ["Date: 2026-06-23","Milk              65.00","Notebook         120.00","Snacks            85.50","Tax               14.50","Grand Total: ₹285.00"].forEach((line,i)=>ctx.fillText(line,70,170+i*70));
+    canvas.toBlob(blob=>handleFile(new File([blob],"sample-receipt.png",{type:"image/png"})),"image/png");
   };
 
   const addEntries=async()=>{
@@ -451,19 +548,17 @@ function ReceiptScanner({state,dispatch,t,f}) {
         const p=await entriesApi.createEntry({label:it.label,amount:it.amount,category:it.category,type:"expense",date:dt});
         dispatch({type:"ADD_ENTRY",p});
       }
-      setResult(null);setPreview(null);setItems([]);
+      setResult(null);setPreview(null);setItems([]);setRawText("");setConfidence(null);
     } catch(e) {
       setError(e.message || "Unable to save receipt items. Please try again.");
-    } finally {
-      setAdding(false);
-    }
+    } finally { setAdding(false); }
   };
   const i=Inp(t);
 
   return (
     <div>
       <div style={{fontSize:22,fontFamily:"'Syne',sans-serif",fontWeight:800,color:t.text,marginBottom:6}}>Receipt Scanner</div>
-      <div style={{fontSize:13,color:t.textMuted,marginBottom:24}}>Upload a receipt photo — AI extracts all items automatically.</div>
+      <div style={{fontSize:13,color:t.textMuted,marginBottom:24}}>Upload a JPG, JPEG, or PNG receipt photo — Tesseract OCR extracts text before parsing totals.</div>
       <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
         <Card t={t} style={{flex:1,minWidth:280}}>
           <SLabel t={t}>Upload Receipt</SLabel>
@@ -471,25 +566,31 @@ function ReceiptScanner({state,dispatch,t,f}) {
             style={{border:`2px dashed ${scanning?t.accent:t.border}`,borderRadius:12,padding:"40px 20px",textAlign:"center",cursor:scanning?"wait":"pointer",background:scanning?t.accentBg:"transparent",transition:"all .2s"}}>
             {scanning?(<div><div style={{fontSize:36,marginBottom:12,display:"inline-block",animation:"spin 1s linear infinite"}}>⟳</div><div style={{color:t.accent,fontWeight:700,fontSize:14}}>Scanning receipt...</div></div>
             ):preview?(<div><img src={preview} alt="Receipt" style={{maxWidth:"100%",maxHeight:200,borderRadius:8,marginBottom:12,objectFit:"contain"}}/><div style={{color:t.textMuted,fontSize:12}}>Click to upload different receipt</div></div>
-            ):(<div><div style={{fontSize:48,marginBottom:12}}>🧾</div><div style={{color:t.text,fontWeight:700,fontSize:14,marginBottom:6}}>Drop receipt here</div><div style={{color:t.textMuted,fontSize:12}}>or click to browse · JPG, PNG, WEBP</div></div>)}
+            ):(<div><div style={{fontSize:48,marginBottom:12}}>🧾</div><div style={{color:t.text,fontWeight:700,fontSize:14,marginBottom:6}}>Drop receipt here</div><div style={{color:t.textMuted,fontSize:12}}>or click to browse · JPG, JPEG, PNG</div></div>)}
           </div>
-          <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/jpg,image/png" style={{display:"none"}} onChange={e=>handleFile(e.target.files[0])}/>
+          <button onClick={generateSampleReceipt} disabled={scanning} style={{...Btn(t.accentBg,t.accent,true),border:`1px solid ${t.accent}44`,marginTop:12}}>Generate sample receipt & scan</button>
           {error&&<div style={{color:t.red,fontSize:12,marginTop:12,padding:"10px 12px",background:t.red+"11",borderRadius:8}}>{error}</div>}
           {!scanning&&!result&&<div style={{marginTop:16,padding:"12px 14px",background:t.accentBg,borderRadius:8,fontSize:11,color:t.textMuted}}>💡 Works best with clear, well-lit photos.</div>}
         </Card>
-        {result&&(
+        {(rawText||result)&&(
           <Card t={t} style={{flex:1,minWidth:280}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><SLabel t={t}>Extracted Items</SLabel><div style={{fontSize:11,color:t.textMuted}}>{result.store} · {result.date}</div></div>
-            {items.map((it,idx)=>(
-              <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:`1px solid ${t.border2}`,opacity:it.include?1:.4}}>
-                <input type="checkbox" checked={it.include} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,include:e.target.checked}:a))} style={{accentColor:t.accent,width:14,height:14,flexShrink:0}}/>
-                <input style={{...i,flex:2,padding:"5px 8px",fontSize:12}} value={it.label} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,label:e.target.value}:a))}/>
-                <select style={{...i,width:110,padding:"5px 8px",fontSize:12}} value={it.category} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,category:e.target.value}:a))}>{CATEGORIES.filter(c=>c!=="Income").map(c=><option key={c}>{c}</option>)}</select>
-                <input style={{...i,width:70,padding:"5px 8px",fontSize:12}} type="number" value={it.amount} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,amount:parseFloat(e.target.value)||0}:a))}/>
-              </div>
-            ))}
-            <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",marginBottom:12,marginTop:8,borderTop:`1px solid ${t.border}`}}><span style={{fontSize:13,color:t.textMuted,fontWeight:700}}>{items.filter(i=>i.include).length} items</span><span style={{fontSize:15,fontWeight:800,color:t.accent}}>{f(items.filter(i=>i.include).reduce((s,i)=>s+i.amount,0))}</span></div>
-            <div style={{display:"flex",gap:8}}><button onClick={addEntries} disabled={adding||items.filter(i=>i.include).length===0} style={{...Btn(t.accent),flex:2,opacity:adding?.7:1}}>{adding?"Adding...":"✓ Add to Budget"}</button><button onClick={()=>{setResult(null);setPreview(null);setItems([]);}} style={Btn(t.surface2,t.textMuted)}>Discard</button></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}><SLabel t={t}>OCR Result</SLabel><div style={{fontSize:11,color:t.textMuted}}>Confidence: {confidence ?? "—"}%</div></div>
+            <div style={{fontSize:11,color:t.textMuted,marginBottom:8}}>Raw OCR text before parsing</div>
+            <pre style={{whiteSpace:"pre-wrap",maxHeight:180,overflow:"auto",background:t.surface2,border:`1px solid ${t.border}`,borderRadius:8,padding:12,color:t.text,fontSize:11}}>{rawText || "No OCR text extracted."}</pre>
+            {result&&!result.parseFailed&&(<>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"16px 0"}}><SLabel t={t}>Extracted Items</SLabel><div style={{fontSize:11,color:t.textMuted}}>{result.store} · {result.date}</div></div>
+              {items.map((it,idx)=>(
+                <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:`1px solid ${t.border2}`,opacity:it.include?1:.4}}>
+                  <input type="checkbox" checked={it.include} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,include:e.target.checked}:a))} style={{accentColor:t.accent,width:14,height:14,flexShrink:0}}/>
+                  <input style={{...i,flex:2,padding:"5px 8px",fontSize:12}} value={it.label} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,label:e.target.value}:a))}/>
+                  <select style={{...i,width:110,padding:"5px 8px",fontSize:12}} value={it.category} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,category:e.target.value}:a))}>{CATEGORIES.filter(c=>c!=="Income").map(c=><option key={c}>{c}</option>)}</select>
+                  <input style={{...i,width:80,padding:"5px 8px",fontSize:12}} type="number" value={it.amount} onChange={e=>setItems(arr=>arr.map((a,j)=>j===idx?{...a,amount:parseFloat(e.target.value)||0}:a))}/>
+                </div>
+              ))}
+              <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",marginBottom:12,marginTop:8,borderTop:`1px solid ${t.border}`}}><span style={{fontSize:13,color:t.textMuted,fontWeight:700}}>{items.filter(i=>i.include).length} items</span><span style={{fontSize:15,fontWeight:800,color:t.accent}}>{f(items.filter(i=>i.include).reduce((s,i)=>s+i.amount,0))}</span></div>
+              <div style={{display:"flex",gap:8}}><button onClick={addEntries} disabled={adding||items.filter(i=>i.include).length===0} style={{...Btn(t.accent),flex:2,opacity:adding?.7:1}}>{adding?"Adding...":"✓ Add to Budget"}</button><button onClick={()=>{setResult(null);setPreview(null);setItems([]);setRawText("");setConfidence(null);}} style={Btn(t.surface2,t.textMuted)}>Discard</button></div>
+            </>)}
           </Card>
         )}
       </div>
@@ -653,10 +754,10 @@ export default function App() {
   const [tab,setTab]=useState("entries");
 
   // ★ CURRENCY STATE — default GBP, user picks from dropdown
-  const [currencyCode,setCurrencyCode]=useState("GBP");
+  const [currencyCode,setCurrencyCode]=useState("INR");
   const currency=CURRENCIES.find(c=>c.code===currencyCode)||CURRENCIES[0];
-  // f() is the currency formatter passed to ALL tabs
-  const f=(n)=>fmt(n,currency.symbol);
+  // Stored amounts remain INR; f() converts only for display.
+  const f=(n)=>fmt(convertAmount(n,currency.code),currency.symbol);
 
   useEffect(()=>{
     let active=true;
