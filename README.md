@@ -1,35 +1,153 @@
 # budget.track
 
-A simple student budget and expense tracker.
+A modern full-stack student budget and expense tracker that helps users manage income, expenses, budgets, goals, and spending insights. The application includes OCR-based receipt scanning, multi-currency support, analytics dashboards, and recurring expense tracking.
 
-## Stack
-- **Backend**: Express + in-memory store (swap for SQLite/Postgres easily)
-- **Frontend**: React (Create React App)
+## 🚀 Live Demo
 
-## Quick Start
+https://student-budget-tracker-khaki-nine.vercel.app
+
+## 📂 GitHub Repository
+
+https://github.com/Gomathi-Lakshmi-06/student-budget-tracker
+
+---
+
+## ✨ Features
+
+* Income and Expense Tracking
+* Budget Management
+* Financial Goals Tracking
+* OCR Receipt Scanner using Tesseract.js
+* Multi-Currency Support with Real-Time Conversion
+* Spending Analytics and Insights
+* Interactive Charts and Visualizations
+* Recurring Expense Management
+* Heatmap-based Spending Visualization
+* Responsive Dark-Themed UI
+
+---
+
+## 🛠️ Tech Stack
+
+### Frontend
+
+* React.js
+* Recharts
+* Tesseract.js
+* CSS
+
+### Backend
+
+* Node.js
+* Express.js
+* REST API
+
+### Deployment
+
+* Frontend: Vercel
+* Backend: Render
+
+---
+
+## 📌 API Routes
+
+| Method | Route              | Description        |
+| ------ | ------------------ | ------------------ |
+| GET    | `/api/entries`     | Fetch all entries  |
+| POST   | `/api/entries`     | Create a new entry |
+| DELETE | `/api/entries/:id` | Delete an entry    |
+
+---
+
+## 📸 Key Modules
+
+### Entries
+
+Track daily income and expenses with category-wise organization.
+
+### Goals
+
+Create and monitor savings goals.
+
+### Receipt Scanner
+
+Upload receipts and automatically extract transaction details using OCR.
+
+### Recurring Expenses
+
+Manage subscriptions and recurring payments.
+
+### Charts & Analytics
+
+Visualize spending patterns through charts and financial insights.
+
+### Multi-Currency Support
+
+View financial data in multiple currencies with automatic conversion.
+
+---
+
+## ⚙️ Local Setup
+
+### Clone Repository
 
 ```bash
-# 1. Install everything
-npm run install:all
-
-# 2. Run both servers together
-npm run dev
+git clone https://github.com/Gomathi-Lakshmi-06/student-budget-tracker.git
+cd student-budget-tracker
 ```
 
-- Frontend: http://localhost:3000  
-- API: http://localhost:3001
+### Install Dependencies
 
-## API Routes
+```bash
+npm install
+cd client
+npm install
+cd ../server
+npm install
+```
 
-| Method | Route | Description |
-|--------|-------|-------------|
-| GET | `/api/entries` | List all entries |
-| POST | `/api/entries` | Create an entry |
-| DELETE | `/api/entries/:id` | Delete an entry |
+### Run Backend
 
-## Extending
+```bash
+cd server
+npm start
+```
 
-- **Add a DB**: Replace the `entries` array in `server/index.js` with a real DB client
-- **Add auth**: Drop in a JWT middleware before your routes
-- **Add charts**: `recharts` or `chart.js` plug straight into the React component
-- **Edit entries**: Add a `PUT /api/entries/:id` route + edit UI in `App.jsx`
+Backend runs on:
+
+```text
+http://localhost:3001
+```
+
+### Run Frontend
+
+```bash
+cd client
+npm start
+```
+
+Frontend runs on:
+
+```text
+http://localhost:3000
+```
+
+---
+
+## 🔮 Future Enhancements
+
+* User Authentication and Authorization
+* Database Integration (MongoDB/PostgreSQL)
+* Export Reports to PDF/Excel
+* Cloud Receipt Storage
+* AI-Based Spending Recommendations
+* Email Budget Alerts
+
+---
+
+## 👨‍💻 Author
+
+**Gomathi Lakshmi G**
+
+B.Tech Computer Science Engineering
+VIT Chennai
